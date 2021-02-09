@@ -1,0 +1,418 @@
+---
+title: "Final Project Part1"
+author: "Jedidah Ngarah"
+output: 
+  rmdformats::readthedown:
+    code_folding: show
+    toc_depth: 5
+---
+
+## Introduction
+
+Spotify is one of the largest music streaming services all over the world. It is an ideal platform for artists to reach their audience. Spotify consists of music from different genres. This analysis uses spotify data with data sets on 4 artists: 
+
+* Drake: Hip hop rapper
+* Chris Brown: Sings R&B and Pop
+* Rihanna: Sings Pop
+* Ella Mai: Sings R&B
+
+##### The purpose of the analysis is to:
+
+* Examine different characteristics of music 
+* Examine correlation between different music features/characteristics
+* Examine music features for different artists (compare artists)
+
+In order to accomplish the above, the analysis uses data on these four artists from spotify, and focuses on the following variables (definitions/meaning of variables are from spotify):
+
+* Danceability: Danceability describes how suitable a track is for dancing based on a combination of musical elements including tempo, rhythm stability, beat strength, and overall regularity. A value of 0.0 is least danceable and 1.0 is most danceable.
+
+* Energy: Energy is a measure from 0.0 to 1.0 and represents a perceptual measure of intensity and activity. Typically, energetic tracks feel fast, loud, and noisy.
+
+* Valence: A measure from 0.0 to 1.0 describing the musical positiveness conveyed by a track. Tracks with high valence sound more positive (e.g. happy, cheerful, euphoric), while tracks with low valence sound more negative (e.g. sad, depressed, angry). 
+
+* Tempo: The overall estimated tempo of a track in beats per minute (BPM). In musical terminology, tempo is the speed or pace of a given piece and derives directly from the average beat duration.
+
+* Loudness: The overall loudness of a track in decibels (dB). Loudness values are averaged across the entire track and are useful for comparing relative loudness of tracks. Loudness is the quality of a sound that is the primary psychological correlate of physical strength (amplitude). Values typical range between -60 and 0 db.
+
+* Album name: Name of the album
+
+* Artist name: Name of the artist
+
+* Speechiness: Speechiness detects the presence of spoken words in a track. The more exclusively speech-like the recording (e.g. talk show, audio book, poetry), the closer to 1.0 the attribute value. Values above 0.66 describe tracks that are probably made entirely of spoken words. Values between 0.33 and 0.66 describe tracks that may contain both music and speech, either in sections or layered, including such cases as rap music. Values below 0.33 most likely represent music and other non-speech-like tracks.
+
+## Exploratory Analysis
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+```{r}
+## install.packages("devtools")
+
+devtools::install_github('charlie86/spotifyr')
+library(spotifyr)
+install.packages("genius")
+install.packages("textdata")
+library(knitr)
+library(tidyverse)
+library(lubridate)
+library(ggthemes)
+library(ggplot2)
+library(ggridges)
+library(corrplot)
+library(genius)
+library(tidytext)
+library(textdata)
+
+```
+
+Install the `devtools` package and then run:
+
+```{r, results='hide'}
+
+## put your Client ID Here!
+Sys.setenv(SPOTIFY_CLIENT_ID = '2d9d5e42d05f477dbb824235b1d8b537')
+
+## put your Client Secret Here!
+Sys.setenv(SPOTIFY_CLIENT_SECRET = '82bee06874334d3bbf26d0c5d3e205f1')
+
+access_token <- get_spotify_access_token()
+
+##four artists of my choosing!
+drake <- get_artist_audio_features('drake')
+chris_brown <- get_artist_audio_features('chris brown')
+rihanna <- get_artist_audio_features('rihanna')
+ella_mai <- get_artist_audio_features('ella mai')
+
+```
+
+###### Saving artist data as .csv file:
+
+1. Drake
+```{r, results='hide'}
+#View(drake)
+drake_df <- drake %>% select(!album_images & !artists & !available_markets)
+#View(drake_df)
+
+write.csv(drake_df, "drake_clean.csv", row.names = FALSE)
+
+drake_clean <- read_csv("drake_clean.csv")
+#head(drake_clean)
+drake_clean <- drake_clean %>% mutate(album_release_date = ymd(album_release_date))
+head(drake_clean)
+```
+
+2. Chris Brown
+```{r, results='hide'}
+#View(chris_brown)
+chris_brown_df <- chris_brown %>% select(!album_images & !artists & !available_markets)
+#View(chris_brown_df)
+
+#write.csv(chris_brown_df, "chris_brown.csv", row.names = FALSE)
+
+chris_brown_clean <- read_csv("chris_brown.csv")
+head(chris_brown_clean)
+```
+
+3. Rihanna
+```{r, results='hide'}
+#View(rihanna)
+rihanna_df <- rihanna %>% select(!album_images & !artists & !available_markets)
+#View(rihanna_df)
+
+#write.csv(rihanna_df, "rihanna.csv", row.names = FALSE)
+
+rihanna_clean <- read_csv("rihanna.csv")
+head(rihanna_clean)
+```
+
+4. Ella Mai
+```{r, results='hide'}
+#View(ella_mai)
+ella_mai_df <- ella_mai %>% select(!album_images & !artists & !available_markets)
+#View(ella_mai_df)
+
+#write.csv(ella_mai_df, "ella_mai.csv", row.names = FALSE)
+
+ella_mai_clean <- read_csv("ella_mai.csv")
+head(ella_mai_clean)
+```
+
+__1. Examining Music Characteristics__
+
+a.) Examining valence for Drake's music (album = Dark Lane Demo Tapes) could literally be dark/sad from the album name
+```{r, fig.cap="Figure 1"}
+drake_clean %>% group_by(album_name) %>%
+  ggplot(aes(x = valence, y = album_name, fill = ..x..)) +
+  geom_density_ridges_gradient() +
+  theme_economist() +
+  xlim(0, 1) +
+  theme(legend.position = "none")
+```
+
+b.) Mean valence
+```{r, eval=TRUE}
+drake_clean %>% group_by(album_name) %>%
+  summarise(mean_valence = mean(valence)) %>%
+  arrange(desc(mean_valence)) %>%
+  kable()
+```
+
+On average Drake's songs have valence less than 0.5.
+
+c.) Lyrics Sentiment (Exploring the correlation between lyrics sentiments and music valence)
+```{r, results='hide'}
+
+dark_lane_demo <- genius_album(artist = "Drake", album = "Dark Lane Demo Tapes")
+#View(dark_lane_demo)
+
+```
+
+```{r}
+
+dark_lane_words <- dark_lane_demo %>% 
+  unnest_tokens(word, lyric) %>%
+  anti_join(stop_words) %>%
+  inner_join(get_sentiments("bing"))
+```
+
+
+```{r}
+dark_lane_words %>%
+  count(word, sentiment, sort = TRUE) %>%
+  filter(n > 2) %>%
+  ggplot(aes(reorder(word, n), n, fill = sentiment)) +
+  geom_col() + coord_flip() +
+  facet_wrap(~sentiment, scales = "free_y") + xlab("Word") + ylab("Number of Words")
+```
+
+Drake uses a lot of negative sentiments/ negative words. I think this is why on average his songs have low valence seeing as by definition valence is a measure from 0.0 to 1.0 describing the musical positiveness conveyed by a track. So if Drake had more positive words or sentiments chances are his albums would have high valence.
+
+
+a.) Examining valence for Rihanna's music (album = Music of The Sun) It sounds positive so let's find out
+```{r, fig.cap="Figure 1"}
+rihanna_clean %>% group_by(album_name) %>%
+  ggplot(aes(x = valence, y = album_name, fill = ..x..)) +
+  geom_density_ridges_gradient() +
+  theme_economist() +
+  xlim(0, 1) +
+  theme(legend.position = "none")
+```
+
+b.) Mean valence
+```{r, eval=TRUE}
+rihanna_clean %>% group_by(album_name) %>%
+  summarise(mean_valence = mean(valence)) %>%
+  arrange(desc(mean_valence)) %>%
+  kable()
+```
+
+On average Rihanna seems to have higher valence albums compared to Drake. 
+
+c.) Lyrics Sentiment (Exploring the correlation between lyrics sentiments and music valence)
+```{r, results='hide'}
+music_of_sun <- genius_album(artist = "Rihanna", album = "Music Of The Sun")
+#View(music_of_sun)
+
+```
+
+```{r}
+music_of_sun_words <- music_of_sun %>% 
+  unnest_tokens(word, lyric) %>%
+  anti_join(stop_words) %>%
+  inner_join(get_sentiments("bing"))
+```
+
+```{r}
+music_of_sun_words %>%
+  count(word, sentiment, sort = TRUE) %>%
+  filter(n > 2) %>%
+  ggplot(aes(reorder(word, n), n, fill = sentiment)) +
+  geom_col() + coord_flip() +
+  facet_wrap(~sentiment, scales = "free_y") + xlab("Word") + ylab("Number of Words")
+```
+
+__2. Examining Correlation__
+
+###### Binding data sets into one data set
+```{r, results='hide'}
+my_fav_artists = rbind(drake_clean, chris_brown_clean, rihanna_clean, ella_mai_clean)
+#View(my_fav_artists)
+```
+
+###### Observing the distribution of variables:
+
+```{r}
+correlated_features <- ggplot(my_fav_artists) +
+    geom_density(aes(energy, fill ="energy", alpha = 0.1)) + 
+    geom_density(aes(danceability, fill ="danceability", alpha = 0.1)) + 
+    geom_density(aes(valence, fill ="valence", alpha = 0.1)) + 
+    scale_x_continuous(name = "Energy, Danceability, Valence") +
+    scale_y_continuous(name = "Density") +
+    ggtitle("Density plot of Energy, Danceability, Valence") +
+    theme_bw() +
+    theme(plot.title = element_text(size = 10, face = "bold"),
+          text = element_text(size = 10)) +
+    theme(legend.title=element_blank()) +
+    scale_fill_brewer(palette="Dark2")
+
+correlated_features
+```
+
+
+* Valence looks like it's normally distributed across the data set
+
+* Danceability and Energy are right-skewed
+
+
+###### Creating a small data frame to test correlation
+```{r, results='hide'}
+my_fav_artists_small <- my_fav_artists %>% select(danceability, energy, valence, tempo, loudness, album_name, artist_name)
+```
+
+```{r}
+music_correlation <- cor(my_fav_artists_small[,-c(6, 7)])
+corrplot(music_correlation, method = 'color', 
+                     order = 'hclust', 
+                     type = 'upper', 
+                     diag = FALSE, 
+                     tl.col = 'black',
+                     addCoef.col = "grey30",
+                     number.cex = 0.6,
+                     col = colorRampPalette(colors = c("blue","green","red"))(200),
+                     main = 'Music Feature Correlation',
+                     mar = c(2,2,2,2),
+                     family = 'Avenir')
+```
+
+I would think that danceability and energy or danceability and tempo would be highly correlated. I mean that's how I perceive music. Like high energy music gets me enegized and happy and dancing, but I guess my definition of music energy is wrong. This is shocking.
+
+However it does make sense that valence and danceability are positively correlated. We tend to dance to happy songs, the words either encourage us or just make us happy.
+
+Looks like energy and loudness are highly correlated. The more energy music has, the more loud it is. According to spotify, energetic tracks feel fast, loud, and noisy.
+
+__3. Comparing artists__
+
+a.) Danceability & Speechiness
+
+```{r}
+drake_clean %>% group_by(album_name) %>%
+  ggplot(aes(x = danceability, y = album_name, fill = ..x..)) +
+  geom_density_ridges_gradient() +
+  theme_bw() +
+  xlim(0, 1) +
+  theme(legend.position = "none")
+```
+
+
+```{r}
+
+rihanna_clean %>% group_by(album_name) %>%
+  ggplot(aes(x = danceability, y = album_name, fill = ..x..)) +
+  geom_density_ridges_gradient() +
+  theme_bw() +
+  xlim(0, 1) +
+  theme(legend.position = "none")
+
+```
+
+```{r}
+riri_drake <- rbind(rihanna_clean,drake_clean)
+#View(riri_drake)
+
+riri_drake %>% group_by(album_name) %>%
+  ggplot(aes(x = danceability, y = album_name, fill = ..x.., colour = artist_name)) +
+  geom_density_ridges_gradient() +
+  theme_bw() +
+  xlim(0, 1) +
+  theme(legend.position = "none") +
+  facet_wrap(~artist_name)
+  
+```
+
+It's not an obvious observation, but Rihanna's music seems to have more danceability compared to Drake's music. Earlier on we saw that on average, Rihanna's music has more valence than Drake's music and from our correlation table above, valence and danceability are positively correlated, so it makes sense that Rihanna's music has more danceability.
+
+```{r}
+my_fav_artists %>% group_by(artist_name) %>%
+  summarise(mean_danceability = mean(danceability)) %>%
+  arrange(desc(mean_danceability)) %>%
+  kable()
+```
+
+I would think that Rihanna's music would have more danceability compared to Drake's music. Earlier on we saw that on average, Rihanna's music has more valence than Drake's music and from our correlation table above, valence and danceability are positively correlated, so it makes sense that Rihanna's music would have more danceability. I think the small difference is because Rihanna has more albums in the data set compared to Drake and these two more albums are skewing the mean danceability
+
+
+```{r}
+my_fav_artists %>% group_by(album_name) %>%
+  ggplot(aes(x = danceability, y = album_name, fill = ..x.., colour = artist_name)) +
+  geom_density_ridges_gradient() +
+  theme_bw() +
+  xlim(0, 1) +
+  theme(legend.position = "none") +
+  facet_wrap(~artist_name)
+```
+
+I would expect Chris Brown to have the highest danceability (which I think he would if he had more albums) because he is a great dancer (aka prince of pop) and he dances in all his songs making me think all his songs are danceable. So save for the fact that he has fewer albums in the analysis, his danceability would be higher.
+
+And Ella Mai just has one album, and her danceability is above 0.5. 
+
+In general, pop tends to be more danceable than rap. Drake is a rapper and so his songs tend to be more poetic/speechy compared to pop and R&B singers (Chris Brown, Rihanna, Ella Mai) whose songs tend to be more rhythmical and more song-y. You can see below that on average Drake's music is more speechy compared to other artists' music.
+
+```{r}
+my_fav_artists %>% group_by(album_name) %>%
+  ggplot(aes(x = speechiness, y = album_name, fill = ..x.., colour = artist_name)) +
+  geom_density_ridges_gradient() +
+  theme_bw() +
+  xlim(0, 1) +
+  theme(legend.position = "none") +
+  facet_wrap(~artist_name)
+```
+
+```{r}
+my_fav_artists %>% group_by(artist_name) %>%
+  summarise(mean_speechiness = mean(speechiness)) %>%
+  arrange(desc(mean_speechiness)) %>%
+  kable()
+```
+
+
+## Summary & Conclusion
+
+This analysis was intended to understand different characteristics/features of music. In addition, the analysis identified relationships of various features that describe music using spotify data.
+
+From the analysis we found that energy is highly positively correlated with loudness while it is negatively correlated with danceabilty, something that is still shocking to me. We also saw that sentiments could impact the music's valence. Recall that valence is a measure from 0.0 to 1.0 describing the musical positiveness conveyed by a track. Tracks with high valence sound more positive (e.g. happy, cheerful, euphoric), while tracks with low valence sound more negative (e.g. sad, depressed, angry). So, negative sentiments subtract the valence.
+
+##### Limitations
+
+The number of albums varied for each artist. Ella Mai only had one album in the analysis, Drake had 11, Chris Brown had 6, and Rihanna had 13. In addition each album has different number of tracks. So, every mean calculations that we did grouping by albums was affected differently depending on (n). 
+
+Secondly, every musician has an EP (Extended Play), but spotify only acknowledges albums because EPs are shorter than albums, nevertheless I think EPs would be valuable in measuring characteristics of each artist's music because it is part of their music. For example so far in her career, Ella Mai has only one album but she has 3 EPs, and those didn't count in this analysis.
+
+## Appendix
+
+Like many people, I love music and it was easy for me to pick artists because these are artists I listen to frequently. Given the data from spotify, I wanted to explore the different features that make music what it is, and that's how I decided questions to ask. I could use tracks instead of albums but I had repeating track names and so I just decided to use album names. I didn't want to filter track names out because they all have different attributes. So, that was my major stumbling block.
+
+###Packages used
+
+```{r}
+library(knitr)
+library(tidyverse)
+library(lubridate)
+library(ggthemes)
+library(ggplot2)
+library(ggridges)
+library(corrplot)
+library(spotifyr)
+library(genius)
+library(tidytext)
+library(textdata)
+```
+
+
+
+```{r printcode, all-code, ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+
+```
+
+
+
